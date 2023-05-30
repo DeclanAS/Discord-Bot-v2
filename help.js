@@ -1,0 +1,1 @@
+exports.help = '```Java\nList of commands:\n1. [prefix] join: Joins voice channel.\n2. [prefix] leave: Exits the voice channel.\n3. [prefix] help: Displays help options.\n```'

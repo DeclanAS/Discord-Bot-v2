@@ -45,9 +45,11 @@ client.on(Events.InteractionCreate, async interaction => {
 	try {
 		switch(interaction.commandName) {
 			case 'play':
+			case 'skip':
 			case 'leave':
 			case 'pause':
 			case 'resume':
+			case 'playlist':
 				await command.execute(interaction, music)
 				break
 			case 'join':

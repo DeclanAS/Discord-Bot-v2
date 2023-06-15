@@ -35,6 +35,5 @@
 
 ## TODO:
 - Add more commands.
-- Remove some action buttons that may cause issues.
-- Add comments
+- Add more comments
 - Refine dependencies.

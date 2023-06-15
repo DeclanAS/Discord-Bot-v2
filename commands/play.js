@@ -1,7 +1,5 @@
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType, VoiceConnectionStatus, entersState } = require('@discordjs/voice')
-const ffmpeg = require('../util/ffmpegStream.js')
 const { SlashCommandBuilder } = require('discord.js')
-const ytdl = require('ytdl-core')
+const ytdl = require ('ytdl-core')
 
 module.exports = {
 

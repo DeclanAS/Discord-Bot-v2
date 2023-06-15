@@ -19,13 +19,19 @@ const {
 	update
 } = require('discord.js')
 
+const ffmpeg = require('./ffmpegStream.js')
 const { decode } = require('html-entities')
 const embedder = require('./embedder.js')
 const config = require('../config.js')
 const play = require('play-dl')
+const axios = require('axios')
 
 class player {
 
+	/* Constructor:
+		- Instantiate Values,
+		- Setup AudioPlayer behavior
+	*/
 	constructor() {
 		console.log(generateDependencyReport())
 		let options = {
@@ -43,6 +49,7 @@ class player {
 		this.queue = []
 	}
 
+	/* Function to connect the bot to the voice channel */
 	async connect(interaction) {
 		this.connection = joinVoiceChannel({
 			adapterCreator: interaction.guild.voiceAdapterCreator,
@@ -53,6 +60,7 @@ class player {
 
 	}
 
+	/* Function to disconnect the bot from the voice channel */
 	async disconnect(interaction) {
 		if(this.connection)
 			if (this.connection._state.status === 'destroyed'){
@@ -199,6 +207,62 @@ class player {
 
 	}
 
+	async playPlayList(interaction, query, num) {
+		console.log(`QUERY:${query} & NUM = ${num}`)
+
+		let playlistID = this.getPlayListID(query)
+
+		if(num == null)
+			num = 2
+
+		if (!interaction.member.voice.channelId){
+			await interaction.reply({content: 'You\'re not in a voice channel.' , ephemeral: true})
+			return
+		}
+
+		await this.connect(interaction)
+
+		let result = await axios.get(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&part=snippet&playlistId=${playlistID}&maxResults=${num}&key=${config.Youtube}`)
+		console.log(result.data)
+		let videos = result.data.items
+
+		videos.forEach(video => {
+			
+			if (decode(video.snippet.title, {level: 'html5'}) != 'Deleted video' && decode(video.snippet.title, {level: 'html5'}) != 'Private video' && decode(video.snippet.videoOwnerChannelTitle, {level: 'html5'}) != '') {
+
+				let data = {
+					id: video.snippet.resourceId.videoId,
+					url: `https://www.youtube.com/watch?v=${video.snippet.resourceId.videoId}`,
+					title: this.trimTitle(decode(video.snippet.title, {level: 'html5'})),
+
+					// thumbnail: video.snippet.thumbnails.default.url,
+
+
+					channelTitle: decode(video.snippet.videoOwnerChannelTitle, {level: 'html5'}),
+					requestorAvatar: `https://cdn.discordapp.com/avatars/${interaction.user.id}/${interaction.user.avatar}.webp`
+				}
+
+				console.log(data)
+
+				if (this.queue.length == 0) {
+					this.queue.push(data)
+					this.playNext(interaction)
+				} else {
+					this.queue.push(data)
+				}
+
+			}
+		})
+
+		if(result){
+			await interaction.reply({content: `${interaction.user.username}#${interaction.user.discriminator} added ${num} songs from your playlist...`})
+		} else {
+			await interaction.reply({content: `Failed to add playlist to the queue!`})
+		}
+
+
+	}
+
 	async playQuery(interaction, query) {
 		if (!interaction.member.voice.channelId){
 			await interaction.reply({content: 'You\'re not in a voice channel.' , ephemeral: true})
@@ -274,14 +338,10 @@ class player {
 
 		this.nowPlayingActionRow = new ActionRowBuilder().addComponents(
 			new ButtonBuilder()
-				.setCustomId('pauseresume')
-				.setLabel('Pause/Resume')
-				.setStyle(ButtonStyle.Primary),
-			new ButtonBuilder()
 				.setCustomId('favorite')
 				.setLabel('Favorite')
 				.setDisabled(true)
-				.setStyle(ButtonStyle.Secondary),
+				.setStyle(ButtonStyle.Primary),
 			new ButtonBuilder()
 				.setCustomId('vold')
 				.setLabel('Volume -')
@@ -298,12 +358,6 @@ class player {
 
 		collector.on('collect', async (interact) => {
 			switch(interact.customId){
-				case 'pauseresume':
-					if(this.audioPlayer.state.status === 'playing')
-						this.pause(interaction)
-					else if (this.audioPlayer.state.status === 'paused')
-						this.resume(interaction)
-					break
 				case 'favorite':
 					console.log('Favourite')
 					console.log(collector._timeout)
@@ -328,6 +382,14 @@ class player {
 		return
 	}
 
+	getPlayListID(url) {
+		var result = url.substring((url.indexOf('&list') + 6), url.length)
+		if(result.includes('&'))
+			result = result.substring(0, (result.indexOf('&')))
+		console.log("Playlist ID: " + result)
+		return result
+	}
+
 	async pause(interaction) {
 		if (this.audioPlayer.pause())
 			await interaction.followUp({ content: `User ${interaction.member.user.username}#${interaction.member.user.discriminator} paused.`, ephemeral: true })
@@ -346,6 +408,12 @@ class player {
 		this.audioPlayer.stop()
 		this.queue = []
 		await interaction.reply({ content: 'You\'ve stopped the music.', ephemeral: true })
+	}
+
+	async skip(interaction) {
+		this.queue.shift()
+		this.playNext(interaction)
+		await interaction.reply({content: 'You\'ve skipped the current song.', ephemeral: true})
 	}
 
 	async volumeUp(interaction){

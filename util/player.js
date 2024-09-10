@@ -1,39 +1,37 @@
 const {
 	generateDependencyReport,
-	CreateAudioPlayerOptions,
 	VoiceConnectionStatus,
 	NoSubscriberBehavior,
 	createAudioResource,
 	AudioPlayerStatus,
 	createAudioPlayer,
 	joinVoiceChannel,
-	entersState,
-	StreamType
+	entersState
 } = require('@discordjs/voice')
 
 const {
 	createMessageComponentCollector,
 	ActionRowBuilder,
 	ButtonBuilder,
-	ButtonStyle,
-	update
+	ButtonStyle
 } = require('discord.js')
 
-const ffmpeg = require('./ffmpegStream.js')
 const { decode } = require('html-entities')
 const embedder = require('./embedder.js')
 const config = require('../config.js')
-const play = require('play-dl')
+const ytstream = require('yt-stream')
 const axios = require('axios')
 
 class player {
 
 	/* Constructor:
-		- Instantiate Values,
+		- Instantiate Values
 		- Setup AudioPlayer behavior
 	*/
 	constructor() {
 		console.log(generateDependencyReport())
+		ytstream.setApiKey(config.Youtube)
+
 		let options = {
 			behaviors: {
 				noSubscriber: NoSubscriberBehavior.Play
@@ -67,7 +65,7 @@ class player {
 				await interaction.reply({ content: 'The bot has already left.', ephemeral:true })
 			} else {
 				this.connection.destroy()
-				await interaction.reply({ content:`User ${interaction.member.user.username}#${interaction.member.user.discriminator} asked me to leave.`, ephemeral:true })
+				await interaction.reply({ content:`User ${interaction.member.user.username} asked me to leave.`, ephemeral:true })
 			}
 		else
 			await interaction.reply({ content: 'The bot never joined to begin with.', ephemeral:true })
@@ -76,12 +74,13 @@ class player {
 	async playNext(interaction) {
 
 		// Create an audio resource using the ffmpeg stream.
-		let stream = await play.stream(this.queue[0].url)
-
-		this.resource = createAudioResource(stream.stream, {
-			inputType: stream.type,
-			inlineVolume: true
+		const stream = await ytstream.stream(this.queue[0].url, {
+			quality: 'high',
+			type:'audio',
+			highWaterMark: 32864
 		})
+
+		this.resource = createAudioResource(stream.stream)
 
 		this.audioPlayer = createAudioPlayer({
 			behaviors: {
@@ -92,15 +91,17 @@ class player {
 		// If the connection is not 'Ready', attempt to enter that state.
 		await this.stablizeConnection()
 
-		// Plays the resouce.
+		// Plays the resource.
 		try {
 			this.lockTrack = false
-			this.audioPlayer.play(this.resource)
-			await this.nowPlaying(this.queue[0], interaction)
-			console.log(`Currently playing ${this.queue[0].title}`)
 
 			// Subscribe the voice connection to the audioPlayer.
 			this.connection.subscribe(this.audioPlayer)
+
+			this.audioPlayer.play(this.resource)
+
+			await this.nowPlaying(this.queue[0], interaction)
+			console.log(`Currently playing ${this.queue[0].title}`)
 
 		} catch (error) {
 			console.log('//////////////// Play Next (Play) ////////////////')
@@ -139,8 +140,6 @@ class player {
 
 			if(this.queue.length != 0)
 				this.playNext(interaction)
-
-
 		})
 
 		this.audioPlayer.on('unsubscribe', () =>{
@@ -174,21 +173,20 @@ class player {
 
 		await this.connect(interaction)
 
-		if((URL.startsWith('https') && play.yt_validate(URL) === 'video') ||
-			(URL.startsWith('http') && play.yt_validate(URL) === 'video')){
+		if(ytstream.validateVideoURL(URL)){
 
-			let result = await play.video_basic_info(URL)
-			result = result.video_details
+			let result = await ytstream.search(URL)
+			console.log(result)
 
 			let data = {
-				             id: result.id,
-				            url: result.url,
-				          title: this.trimTitle(decode(result.title, {level: 'html5'})),
-				       duration: result.durationInSec,
-				      thumbnail: result.thumbnails[result.thumbnails.length - 1].url,
-				      requestor: `${interaction.user.username}#${interaction.user.discriminator}`,
-				    durationStr: result.durationRaw,
-				   channelTitle: decode(result.channel.name, {level: 'html5'}),
+				             id: result[0].id,
+				            url: result[0].url,
+				          title: this.trimTitle(decode(result[0].title, {level: 'html5'})),
+				       duration: result[0].length/1000,
+				      thumbnail: result[0].thumbnail,
+				      requestor: `${interaction.user.username}`,
+				    durationStr: result[0].length_text,
+				   channelTitle: decode(result[0].author, {level: 'html5'}),
 				requestorAvatar: `https://cdn.discordapp.com/avatars/${interaction.user.id}/${interaction.user.avatar}.webp`
 			}
 
@@ -202,7 +200,7 @@ class player {
 			this.addTrack(data, interaction)
 
 		} else {
-			await interaction.reply({content: 'Not a valid Youtube url.!'})
+			await interaction.reply({content: 'Not a valid Youtube url!'})
 		}
 
 	}
@@ -223,7 +221,7 @@ class player {
 		await this.connect(interaction)
 
 		let result = await axios.get(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&part=snippet&playlistId=${playlistID}&maxResults=${num}&key=${config.Youtube}`)
-		console.log(result.data)
+
 		let videos = result.data.items
 
 		videos.forEach(video => {
@@ -234,15 +232,10 @@ class player {
 					id: video.snippet.resourceId.videoId,
 					url: `https://www.youtube.com/watch?v=${video.snippet.resourceId.videoId}`,
 					title: this.trimTitle(decode(video.snippet.title, {level: 'html5'})),
-
 					// thumbnail: video.snippet.thumbnails.default.url,
-
-
 					channelTitle: decode(video.snippet.videoOwnerChannelTitle, {level: 'html5'}),
 					requestorAvatar: `https://cdn.discordapp.com/avatars/${interaction.user.id}/${interaction.user.avatar}.webp`
 				}
-
-				console.log(data)
 
 				if (this.queue.length == 0) {
 					this.queue.push(data)
@@ -254,7 +247,7 @@ class player {
 			}
 		})
 
-		if(result){
+		if (result){
 			await interaction.reply({content: `${interaction.user.username}#${interaction.user.discriminator} added ${num} songs from your playlist...`})
 		} else {
 			await interaction.reply({content: `Failed to add playlist to the queue!`})
@@ -271,22 +264,18 @@ class player {
 
 		await this.connect(interaction)
 
-		let result = await play.search(query, {
-			limit: 1
-		})
-
-		console.log(result[0])
+		let result = await ytstream.search(query)
 
 		if (parseInt(result.length) > 0) {
 			let data = {
 				             id: result[0].id,
 				            url: result[0].url,
 				          title: this.trimTitle(decode(result[0].title, {level: 'html5'})),
-				       duration: result[0].durationInSec,
-				      thumbnail: result[0].thumbnails[0].url,
-				      requestor: `${interaction.user.username}#${interaction.user.discriminator}`,
-				    durationStr: result[0].durationRaw,
-				   channelTitle: decode(result[0].channel.name, {level: 'html5'}),
+				       duration: result[0].length/1000,
+				      thumbnail: result[0].thumbnail,
+				      requestor: `${interaction.user.username}`,
+				    durationStr: result[0].length_text,
+				   channelTitle: decode(result[0].author, {level: 'html5'}),
 				requestorAvatar: `https://cdn.discordapp.com/avatars/${interaction.user.id}/${interaction.user.avatar}.webp`
 			}
 
@@ -345,14 +334,16 @@ class player {
 			new ButtonBuilder()
 				.setCustomId('vold')
 				.setLabel('Volume -')
+				.setDisabled(true)
 				.setStyle(ButtonStyle.Danger),
 			new ButtonBuilder()
 				.setCustomId('volu')
 				.setLabel('Volume +')
+				.setDisabled(true)
 				.setStyle(ButtonStyle.Success)
 		)
 
-		this.nowPlayingMessage = await interaction.followUp({embeds: [nowPlaying], components: [this.nowPlayingActionRow]})
+		this.nowPlayingMessage = await interaction.followUp({embeds: [nowPlaying], components: []})
 
 		const collector = interaction.channel.createMessageComponentCollector({ filter, time: (this.queue[0].duration * 1000)})
 
@@ -360,9 +351,6 @@ class player {
 			switch(interact.customId){
 				case 'favorite':
 					console.log('Favourite')
-					console.log(collector._timeout)
-					console.log(collector._timeout._idlePrev)
-					console.log(collector._timeout._idleNext)
 					break
 
 				case 'vold':

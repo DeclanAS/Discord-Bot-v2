@@ -15,20 +15,22 @@
 - underscore (v1.13.7), sub-dependency.
 - yt-stream (1.7.4), replaced play-dl.
 
-## Commands:
-- \[prefix\] **join**
+## Slash Commands:
+- **/join**
   - The bot joins your voice channel if possible.
-- \[prefix\] **leave**
+- **/leave**
   - The bot leaves your voice channel.
-- \[prefix\] **play** \[Youtube Search\]
-  - Plays the sound from the first result the Youtube API returns.
-- \[prefix\] **play** \[Youtube URL\]
-  - Plays the sound from the corresponding Youtube video.
-- \[prefix\] **pause**
+- **/play** \[Youtube Search\]
+  - Plays the music from the first result the Youtube API returns.
+- **/play** \[Youtube URL\]
+  - Plays the music from the corresponding Youtube video.
+- **/playlist** \[Youtube Playlist URL\] \[Number of songs to add\]
+  - Plays each song from the Youtube playlist with the option to limit a certain number of them.
+- **/pause**
   - Pauses the sound/song.
-- \[prefix\] **resume**
+- **/resume**
   - Resumes the sound/song.
-- \[prefix\] **stop**
+- **/stop**
   - Stops the current song all together, and deletes the queue elements.
-- \[prefix\] **help**
+- **/help**
   - Prints out helpful information.

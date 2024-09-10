@@ -13,7 +13,7 @@ const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBi
 
 let music = new player()
 client.commands = new Collection()
-const cmdPath = path.join('C:\\Users\\Declan\\Desktop\\Discord Bot', 'commands')
+const cmdPath = path.join(config.Path, 'commands')
 const cmdFiles = fs.readdirSync(cmdPath).filter(file => file.endsWith('.js'))
 
 const commands = []
